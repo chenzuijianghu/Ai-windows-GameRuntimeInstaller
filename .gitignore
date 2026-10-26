@@ -1,5 +1,13 @@
 # Windows 运行库缓存
 # 此目录用于存放游戏运行库安装包，支持离线使用
+运行库缓存/
 *.exe
 *.msi
 *.zip
+
+# 日志目录
+日志/
+*.txt
+
+# PowerShell 历史
+*.ps1:Zone.Identifier
