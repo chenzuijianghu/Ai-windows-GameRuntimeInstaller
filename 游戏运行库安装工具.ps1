@@ -693,20 +693,6 @@ $btnInstall.Add_Click({
     $btnChangeCacheDir.Enabled = $true
     $btnOpenCacheDir.Enabled = $true
 })
-        }
-
-        $form.Refresh()
-    }
-
-    $statusLabel.Text = "下载完成！共 $downloadedCount / $totalItems 项，点击「安装」继续"
-    $btnDetect.Enabled = $true
-    $btnInstall.Enabled = $true
-    $btnInstallOnly.Enabled = $true
-    $selectAllBtn.Enabled = $true
-    $deselectAllBtn.Enabled = $true
-    $btnChangeCacheDir.Enabled = $true
-    $btnOpenCacheDir.Enabled = $true
-})
 
 # ============================================
 # 安装逻辑（只安装不下载）
