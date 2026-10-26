@@ -9,9 +9,9 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ============================================
-# 缓存目录配置（默认 D 盘）
+# 缓存目录配置（默认当前目录）
 # ============================================
-$Script:CacheDir = "D:\游戏运行库"
+$Script:CacheDir = Join-Path $PSScriptRoot "运行库缓存"
 if (-not (Test-Path $Script:CacheDir)) {
     New-Item -ItemType Directory -Path $Script:CacheDir -Force | Out-Null
 }
@@ -410,7 +410,7 @@ $form.Controls.Add($deselectAllBtn)
 
 # 状态标签
 $statusLabel = New-Object System.Windows.Forms.Label
-$statusLabel.Text = "点击「检测」开始扫描系统运行库"
+$statusLabel.Text = "点击「检测」开始扫描，然后「下载」→「安装」"
 $statusLabel.Font = New-Object System.Drawing.Font("Microsoft YaHei UI", 9)
 $statusLabel.Location = New-Object System.Drawing.Point(250, 86)
 $statusLabel.AutoSize = $true
@@ -482,15 +482,26 @@ $btnDetect.FlatStyle = "Flat"
 $form.Controls.Add($btnDetect)
 
 $btnInstall = New-Object System.Windows.Forms.Button
-$btnInstall.Text = "安  装"
-$btnInstall.Size = New-Object System.Drawing.Size(120, 40)
+$btnInstall.Text = "下  载"
+$btnInstall.Size = New-Object System.Drawing.Size(100, 40)
 $btnInstall.Location = New-Object System.Drawing.Point(340, 550)
 $btnInstall.Font = New-Object System.Drawing.Font("Microsoft YaHei UI", 11, [System.Drawing.FontStyle]::Bold)
-$btnInstall.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)
+$btnInstall.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
 $btnInstall.ForeColor = [System.Drawing.Color]::White
 $btnInstall.FlatStyle = "Flat"
 $btnInstall.Enabled = $false
 $form.Controls.Add($btnInstall)
+
+$btnInstallOnly = New-Object System.Windows.Forms.Button
+$btnInstallOnly.Text = "安  装"
+$btnInstallOnly.Size = New-Object System.Drawing.Size(100, 40)
+$btnInstallOnly.Location = New-Object System.Drawing.Point(450, 550)
+$btnInstallOnly.Font = New-Object System.Drawing.Font("Microsoft YaHei UI", 11, [System.Drawing.FontStyle]::Bold)
+$btnInstallOnly.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)
+$btnInstallOnly.ForeColor = [System.Drawing.Color]::White
+$btnInstallOnly.FlatStyle = "Flat"
+$btnInstallOnly.Enabled = $false
+$form.Controls.Add($btnInstallOnly)
 
 # ============================================
 # 浏览缓存目录
@@ -583,9 +594,88 @@ $deselectAllBtn.Add_Click({
 })
 
 # ============================================
-# 安装逻辑
+# 下载逻辑（只下载不安装）
 # ============================================
 $btnInstall.Add_Click({
+    # 更新缓存目录
+    $Script:CacheDir = $cacheDirTextBox.Text
+    if (-not (Test-Path $Script:CacheDir)) {
+        New-Item -ItemType Directory -Path $Script:CacheDir -Force | Out-Null
+    }
+
+    $selectedRows = @()
+    foreach ($row in $dataGrid.Rows) {
+        if ($row.Cells["Check"].Value -eq $true -and $row.Cells["Status"].Value -ne "已安装") {
+            $selectedRows += $row
+        }
+    }
+
+    if ($selectedRows.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("请先选择需要下载的运行库", "提示", "OK", "Information")
+        return
+    }
+
+    $btnDetect.Enabled = $false
+    $btnInstall.Enabled = $false
+    $btnInstallOnly.Enabled = $false
+    $selectAllBtn.Enabled = $false
+    $deselectAllBtn.Enabled = $false
+    $btnChangeCacheDir.Enabled = $false
+    $btnOpenCacheDir.Enabled = $false
+
+    $totalItems = $selectedRows.Count
+    $downloadedCount = 0
+
+    foreach ($row in $selectedRows) {
+        $rtName = $row.Cells["Name"].Value
+        $rt = $Script:Runtimes | Where-Object { $_.Name -eq $rtName }
+        if (-not $rt) { continue }
+
+        $row.Cells["Status"].Value = "下载中..."
+        $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Orange
+        $form.Refresh()
+
+        # 检查是否已缓存
+        $cacheFile = Join-Path $Script:CacheDir $rt.FileName
+        if (Test-Path $cacheFile) {
+            $row.Cells["Progress"].Value = "已缓存"
+            $row.Cells["Status"].Value = "已下载"
+            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Green
+            $downloadedCount++
+            continue
+        }
+
+        # 下载
+        try {
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($rt.DownloadUrl, $cacheFile)
+            $row.Cells["Progress"].Value = "下载完成"
+            $row.Cells["Status"].Value = "已下载"
+            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Green
+            $downloadedCount++
+        } catch {
+            $row.Cells["Progress"].Value = "下载失败"
+            $row.Cells["Status"].Value = "失败"
+            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
+        }
+
+        $form.Refresh()
+    }
+
+    $statusLabel.Text = "下载完成！共 $downloadedCount / $totalItems 项，点击「安装」继续"
+    $btnDetect.Enabled = $true
+    $btnInstall.Enabled = $true
+    $btnInstallOnly.Enabled = $true
+    $selectAllBtn.Enabled = $true
+    $deselectAllBtn.Enabled = $true
+    $btnChangeCacheDir.Enabled = $true
+    $btnOpenCacheDir.Enabled = $true
+})
+
+# ============================================
+# 安装逻辑（只安装不下载）
+# ============================================
+$btnInstallOnly.Add_Click({
     # 更新缓存目录
     $Script:CacheDir = $cacheDirTextBox.Text
     if (-not (Test-Path $Script:CacheDir)) {
@@ -606,12 +696,14 @@ $btnInstall.Add_Click({
 
     $btnDetect.Enabled = $false
     $btnInstall.Enabled = $false
+    $btnInstallOnly.Enabled = $false
     $selectAllBtn.Enabled = $false
     $deselectAllBtn.Enabled = $false
     $btnChangeCacheDir.Enabled = $false
     $btnOpenCacheDir.Enabled = $false
 
     $totalItems = $selectedRows.Count
+    $installedCount = 0
 
     foreach ($row in $selectedRows) {
         $rtName = $row.Cells["Name"].Value
@@ -623,121 +715,59 @@ $btnInstall.Add_Click({
         $form.Refresh()
 
         $success = $false
+        $cacheFile = Join-Path $Script:CacheDir $rt.FileName
 
-        # .NET 3.5 特殊处理（使用 Windows 功能）
-        if ($rt.UseWindowsFeature) {
-            $row.Cells["Progress"].Value = "启用 Windows 功能..."
-            $form.Refresh()
-            try {
+        # 检查安装包是否存在
+        if (-not (Test-Path $cacheFile)) {
+            $row.Cells["Progress"].Value = "未找到安装包"
+            $row.Cells["Status"].Value = "失败"
+            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
+            continue
+        }
+
+        # 安装
+        $row.Cells["Progress"].Value = "安装中..."
+        $form.Refresh()
+        try {
+            if ($rt.UseWindowsFeature) {
+                # .NET 3.5 特殊处理
                 $result = Enable-WindowsOptionalFeature -Online -FeatureName "NetFx3" -NoRestart -ErrorAction Stop
                 if ($result.RestartNeeded -or $result.State -eq "Enabled") {
                     $success = $true
                 }
-            } catch {
-                $row.Cells["Progress"].Value = "启用失败（需要联网）"
             }
-        }
-        # DirectX 特殊处理（需要先解压）
-        elseif ($rt.PreExtract) {
-            $cacheFile = Join-Path $Script:CacheDir $rt.FileName
-            if (Test-Path $cacheFile) {
-                $row.Cells["Progress"].Value = "使用本地缓存..."
-            } else {
-                $row.Cells["Progress"].Value = "下载中..."
-                $form.Refresh()
-                try {
-                    $webClient = New-Object System.Net.WebClient
-                    $webClient.DownloadFile($rt.DownloadUrl, $cacheFile)
-                    $row.Cells["Progress"].Value = "下载完成"
-                } catch {
-                    $row.Cells["Progress"].Value = "下载失败"
-                    $row.Cells["Status"].Value = "失败"
-                    $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
-                    continue
+            elseif ($rt.PreExtract) {
+                # DirectX 特殊处理
+                $extractDir = Join-Path $env:TEMP "dx_extract"
+                if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+                New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+                Start-Process -FilePath $cacheFile -ArgumentList "/Q /T:$extractDir" -Wait -NoNewWindow
+                $setupFile = Join-Path $extractDir "DXSETUP.exe"
+                if (Test-Path $setupFile) {
+                    Start-Process -FilePath $setupFile -ArgumentList "/silent" -Wait -NoNewWindow
+                    $success = $true
                 }
             }
-            # 解压并安装
-            $extractDir = Join-Path $env:TEMP "dx_extract"
-            if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
-            New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-            $row.Cells["Progress"].Value = "解压中..."
-            $form.Refresh()
-            Start-Process -FilePath $cacheFile -ArgumentList "/Q /T:$extractDir" -Wait -NoNewWindow
-            $setupFile = Join-Path $extractDir "DXSETUP.exe"
-            if (Test-Path $setupFile) {
-                Start-Process -FilePath $setupFile -ArgumentList "/silent" -Wait -NoNewWindow
-                $success = $true
-            }
-        }
-        # 压缩包类型（需要先解压）
-        elseif ($rt.IsArchive) {
-            $cacheFile = Join-Path $Script:CacheDir $rt.FileName
-            if (Test-Path $cacheFile) {
-                $row.Cells["Progress"].Value = "使用本地缓存..."
-            } else {
-                $row.Cells["Progress"].Value = "下载中..."
-                $form.Refresh()
-                try {
-                    $webClient = New-Object System.Net.WebClient
-                    $webClient.DownloadFile($rt.DownloadUrl, $cacheFile)
-                    $row.Cells["Progress"].Value = "下载完成"
-                } catch {
-                    $row.Cells["Progress"].Value = "下载失败"
-                    $row.Cells["Status"].Value = "失败"
-                    $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
-                    continue
+            elseif ($rt.IsArchive) {
+                # 压缩包类型
+                $extractDir = Join-Path $Script:CacheDir ($rt.FileName -replace '\.zip$', '')
+                if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+                Expand-Archive -Path $cacheFile -DestinationPath $extractDir -Force
+                $setupFile = Get-ChildItem -Path $extractDir -Filter "*.bat" -Recurse | Select-Object -First 1
+                if ($setupFile) {
+                    Start-Process -FilePath $setupFile.FullName -Wait -NoNewWindow
+                    $success = $true
                 }
             }
-            # 解压
-            $extractDir = Join-Path $Script:CacheDir ($rt.FileName -replace '\.zip$', '')
-            if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
-            $row.Cells["Progress"].Value = "解压中..."
-            $form.Refresh()
-            Expand-Archive -Path $cacheFile -DestinationPath $extractDir -Force
-            # 查找安装脚本
-            $setupFile = Get-ChildItem -Path $extractDir -Filter "*.bat" -Recurse | Select-Object -First 1
-            if ($setupFile) {
-                Start-Process -FilePath $setupFile.FullName -Wait -NoNewWindow
-                $success = $true
-            } else {
-                $row.Cells["Progress"].Value = "未找到安装脚本"
-            }
-        }
-        # 普通安装
-        else {
-            $cacheFile = Join-Path $Script:CacheDir $rt.FileName
-            if (Test-Path $cacheFile) {
-                $row.Cells["Progress"].Value = "使用本地缓存..."
-                $form.Refresh()
-            } else {
-                # 下载
-                $row.Cells["Progress"].Value = "下载中..."
-                $form.Refresh()
-                try {
-                    $webClient = New-Object System.Net.WebClient
-                    $webClient.DownloadFile($rt.DownloadUrl, $cacheFile)
-                    $row.Cells["Progress"].Value = "下载完成"
-                    $form.Refresh()
-                } catch {
-                    $row.Cells["Progress"].Value = "下载失败"
-                    $row.Cells["Status"].Value = "失败"
-                    $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
-                    continue
-                }
-            }
-
-            # 安装
-            $row.Cells["Progress"].Value = "安装中..."
-            $form.Refresh()
-            try {
+            else {
+                # 普通安装
                 $installArgs = $rt.InstallArgs
-                # 替换环境变量
                 $installArgs = $ExecutionContext.InvokeCommand.ExpandString($installArgs)
                 Start-Process -FilePath $cacheFile -ArgumentList $installArgs -Wait -NoNewWindow
                 $success = $true
-            } catch {
-                $row.Cells["Progress"].Value = "安装失败"
             }
+        } catch {
+            $row.Cells["Progress"].Value = "安装失败"
         }
 
         if ($success) {
@@ -746,6 +776,7 @@ $btnInstall.Add_Click({
             $row.Cells["Progress"].Value = "完成"
             $row.Cells["Check"].Value = $false
             $row.Cells["Check"].ReadOnly = $true
+            $installedCount++
         } else {
             $row.Cells["Status"].Value = "失败"
             $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
@@ -754,9 +785,10 @@ $btnInstall.Add_Click({
         $form.Refresh()
     }
 
-    $statusLabel.Text = "安装完成！共处理 $totalItems 项"
+    $statusLabel.Text = "安装完成！共 $installedCount / $totalItems 项"
     $btnDetect.Enabled = $true
     $btnInstall.Enabled = $true
+    $btnInstallOnly.Enabled = $true
     $selectAllBtn.Enabled = $true
     $deselectAllBtn.Enabled = $true
     $btnChangeCacheDir.Enabled = $true
