@@ -123,7 +123,7 @@ $Script:Runtimes = @(
     @{
         Name = "DirectX 最终用户运行库"
         Category = "common"
-        CheckScript = { Test-Path "C:\Windows\System32\d3dx9_43.dll" -or (Test-Path "C:\Windows\SysWOW64\d3dx9_43.dll") }
+        CheckScript = { (Test-Path "C:\Windows\System32\d3dx9_43.dll") -or (Test-Path "C:\Windows\SysWOW64\d3dx9_43.dll") }
         DownloadUrl = "https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe"
         FileName = "directx_Jun2010_redist.exe"
         InstallArgs = "/Q /T:$env:TEMP\dx_extract"
@@ -163,7 +163,7 @@ $Script:Runtimes = @(
     @{
         Name = "Java Runtime (JRE) 8"
         Category = "optional"
-        CheckScript = { Test-Path "HKLM:\SOFTWARE\JavaSoft\Java Runtime Environment\1.8" -or (Test-Path "C:\Program Files\Java\jre1.8*") -or (Test-Path "C:\Program Files (x86)\Java\jre1.8*") }
+        CheckScript = { (Test-Path "HKLM:\SOFTWARE\JavaSoft\Java Runtime Environment\1.8") -or (Test-Path "C:\Program Files\Java\jre1.8*") -or (Test-Path "C:\Program Files (x86)\Java\jre1.8*") }
         DownloadUrl = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=247931_89d678f2be164786b292527658ca1605"
         FileName = "jre-8-windows-x64.exe"
         InstallArgs = "/s"
@@ -175,7 +175,7 @@ $Script:Runtimes = @(
     @{
         Name = "OpenAL 音频库"
         Category = "optional"
-        CheckScript = { Test-Path "HKLM:\SOFTWARE\OpenAL" -or (Test-Path "C:\Windows\System32\OpenAL32.dll") }
+        CheckScript = { (Test-Path "HKLM:\SOFTWARE\OpenAL") -or (Test-Path "C:\Windows\System32\OpenAL32.dll") }
         DownloadUrl = "https://www.openal.org/downloads/oalinst.zip"
         FileName = "oalinst.zip"
         InstallArgs = "/S"
@@ -307,7 +307,7 @@ $Script:Runtimes = @(
     @{
         Name = "Microsoft Build of OpenJDK 17"
         Category = "optional"
-        CheckScript = { Test-Path "HKLM:\SOFTWARE\Microsoft\JDK\17*" -or (Test-Path "C:\Program Files\Microsoft\jdk-*") }
+        CheckScript = { (Test-Path "HKLM:\SOFTWARE\Microsoft\JDK\17*") -or (Test-Path "C:\Program Files\Microsoft\jdk-*") }
         DownloadUrl = "https://aka.ms/download-jdk/microsoft-jdk-17-windows-x64.msi"
         FileName = "microsoft-jdk-17-windows-x64.msi"
         InstallArgs = "/q /norestart"
