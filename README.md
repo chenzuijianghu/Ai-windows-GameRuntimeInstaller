@@ -1,6 +1,6 @@
 #  游戏运行库自动检测安装工具
 
-> **AI Generated** - 本项目由 AI 辅助开发
+> **AI Generated** - 本项目由 AI 辅助开发-纯度很高
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://docs.microsoft.com/powershell)
 [![Windows](https://img.shields.io/badge/Windows-7/8/10/11-lightgrey.svg)](https://www.microsoft.com/windows)
@@ -101,9 +101,6 @@ GameRuntimeInstaller/
 ### v1.0.0
 - 🎉 初始版本发布
 
-##  贡献
-
-欢迎提交 Issue 和 Pull Request！
 
 ## 📄 许可证
 
