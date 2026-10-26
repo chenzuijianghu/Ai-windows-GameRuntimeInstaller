@@ -805,12 +805,17 @@ $btnInstallOnly.Add_Click({
                 $extractDir = Join-Path $Script:CacheDir ($rt.FileName -replace '\.zip$', '')
                 if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
                 Expand-Archive -Path $cacheFile -DestinationPath $extractDir -Force
-                $setupFile = Get-ChildItem -Path $extractDir -Filter "*.bat" -Recurse | Select-Object -First 1
+                # 查找安装文件（.exe, .msi, .bat）
+                $setupFile = Get-ChildItem -Path $extractDir -Include "*.exe","*.msi","*.bat" -Recurse | Where-Object { $_.Name -match "setup|install" } | Select-Object -First 1
+                if (-not $setupFile) {
+                    $setupFile = Get-ChildItem -Path $extractDir -Filter "*.exe" -Recurse | Select-Object -First 1
+                }
                 if ($setupFile) {
+                    Write-Log "找到安装文件：$($setupFile.Name)" "INFO"
                     Start-Process -FilePath $setupFile.FullName -Wait -NoNewWindow
                     $success = $true
                 } else {
-                    throw "未找到安装脚本"
+                    throw "未找到安装文件（.exe/.msi/.bat）"
                 }
             }
             else {
@@ -818,10 +823,14 @@ $btnInstallOnly.Add_Click({
                 $installArgs = $rt.InstallArgs
                 $installArgs = $ExecutionContext.InvokeCommand.ExpandString($installArgs)
                 $process = Start-Process -FilePath $cacheFile -ArgumentList $installArgs -Wait -NoNewWindow -PassThru
-                if ($process.ExitCode -ne 0) {
+                # 错误码 1638 = 已安装更新版本，视为成功
+                if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 1638) {
                     throw "安装程序返回错误码：$($process.ExitCode)"
                 }
                 $success = $true
+                if ($process.ExitCode -eq 1638) {
+                    Write-Log "安装跳过：$rtName - 已安装更新版本" "WARN"
+                }
             }
         } catch {
             $errorMsg = $_.Exception.Message
