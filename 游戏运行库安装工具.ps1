@@ -9,12 +9,31 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ============================================
+# 日志配置
+# ============================================
+$Script:LogDir = Join-Path $PSScriptRoot "日志"
+if (-not (Test-Path $Script:LogDir)) {
+    New-Item -ItemType Directory -Path $Script:LogDir -Force | Out-Null
+}
+$Script:LogFile = Join-Path $Script:LogDir ("运行库安装日志_{0}.txt" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Level] $Message"
+    Add-Content -Path $Script:LogFile -Value $logEntry -Encoding UTF8
+}
+
+Write-Log "========== 程序启动 =========="
+
+# ============================================
 # 缓存目录配置（默认当前目录）
 # ============================================
 $Script:CacheDir = Join-Path $PSScriptRoot "运行库缓存"
 if (-not (Test-Path $Script:CacheDir)) {
     New-Item -ItemType Directory -Path $Script:CacheDir -Force | Out-Null
 }
+Write-Log "缓存目录：$Script:CacheDir"
 
 $Script:Runtimes = @(
     # ============================================
@@ -663,22 +682,26 @@ $btnInstall.Add_Click({
             $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Green
             $row.Cells["Progress"].Value = "已缓存"
             $downloadedCount++
+            Write-Log "已缓存：$rtName" "INFO"
             continue
         }
 
         # 下载
         try {
+            Write-Log "开始下载：$rtName - $($rt.DownloadUrl)" "INFO"
             $webClient = New-Object System.Net.WebClient
             $webClient.DownloadFile($rt.DownloadUrl, $cacheFile)
             $row.Cells["DownloadStatus"].Value = "已下载"
             $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Green
             $row.Cells["Progress"].Value = "下载完成"
             $downloadedCount++
+            Write-Log "下载成功：$rtName -> $cacheFile" "INFO"
         } catch {
             $errorMsg = $_.Exception.Message
             $row.Cells["DownloadStatus"].Value = "失败"
             $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Red
             $row.Cells["Progress"].Value = "失败：$errorMsg"
+            Write-Log "下载失败：$rtName - $errorMsg" "ERROR"
         }
 
         $form.Refresh()
@@ -745,6 +768,7 @@ $btnInstallOnly.Add_Click({
             $row.Cells["InstallStatus"].Value = "失败"
             $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Red
             $row.Cells["Progress"].Value = "未找到安装包，请先下载"
+            Write-Log "安装失败：$rtName - 未找到安装包 $cacheFile" "ERROR"
             continue
         }
 
@@ -752,6 +776,7 @@ $btnInstallOnly.Add_Click({
         $row.Cells["Progress"].Value = "安装中..."
         $form.Refresh()
         try {
+            Write-Log "开始安装：$rtName - $cacheFile" "INFO"
             if ($rt.UseWindowsFeature) {
                 # .NET 3.5 特殊处理
                 $result = Enable-WindowsOptionalFeature -Online -FeatureName "NetFx3" -NoRestart -ErrorAction Stop
@@ -803,6 +828,7 @@ $btnInstallOnly.Add_Click({
             $row.Cells["InstallStatus"].Value = "失败"
             $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Red
             $row.Cells["Progress"].Value = "失败：$errorMsg"
+            Write-Log "安装失败：$rtName - $errorMsg" "ERROR"
             continue
         }
 
@@ -813,6 +839,7 @@ $btnInstallOnly.Add_Click({
             $row.Cells["Check"].Value = $false
             $row.Cells["Check"].ReadOnly = $true
             $installedCount++
+            Write-Log "安装成功：$rtName" "INFO"
         }
 
         $form.Refresh()
