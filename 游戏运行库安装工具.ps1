@@ -440,32 +440,39 @@ $colCheck.Name = "Check"
 
 $colName = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
 $colName.HeaderText = "运行库名称"
-$colName.Width = 280
+$colName.Width = 250
 $colName.Name = "Name"
 $colName.ReadOnly = $true
 
 $colCategory = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
 $colCategory.HeaderText = "类型"
-$colCategory.Width = 70
+$colCategory.Width = 60
 $colCategory.Name = "Category"
 $colCategory.ReadOnly = $true
 
-$colStatus = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
-$colStatus.HeaderText = "状态"
-$colStatus.Width = 110
-$colStatus.Name = "Status"
-$colStatus.ReadOnly = $true
+$colDownloadStatus = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+$colDownloadStatus.HeaderText = "下载状态"
+$colDownloadStatus.Width = 90
+$colDownloadStatus.Name = "DownloadStatus"
+$colDownloadStatus.ReadOnly = $true
+
+$colInstallStatus = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+$colInstallStatus.HeaderText = "安装状态"
+$colInstallStatus.Width = 90
+$colInstallStatus.Name = "InstallStatus"
+$colInstallStatus.ReadOnly = $true
 
 $colProgress = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
-$colProgress.HeaderText = "进度"
-$colProgress.Width = 175
+$colProgress.HeaderText = "进度/原因"
+$colProgress.Width = 200
 $colProgress.Name = "Progress"
 $colProgress.ReadOnly = $true
 
 $dataGrid.Columns.Add($colCheck)
 $dataGrid.Columns.Add($colName)
 $dataGrid.Columns.Add($colCategory)
-$dataGrid.Columns.Add($colStatus)
+$dataGrid.Columns.Add($colDownloadStatus)
+$dataGrid.Columns.Add($colInstallStatus)
 $dataGrid.Columns.Add($colProgress)
 
 $form.Controls.Add($dataGrid)
@@ -544,13 +551,17 @@ $btnDetect.Add_Click({
     $statusLabel.Text = "正在检测..."
     $btnDetect.Enabled = $false
     $btnInstall.Enabled = $false
+    $btnInstallOnly.Enabled = $false
     $dataGrid.Rows.Clear()
     $form.Refresh()
 
     foreach ($rt in $Script:Runtimes) {
         $installed = & $rt.CheckScript
-        $status = if ($installed) { "已安装" } else { "未安装" }
         $categoryText = if ($rt.Category -eq "common") { "通用" } else { "可选" }
+
+        # 检查是否已下载
+        $cacheFile = Join-Path $Script:CacheDir $rt.FileName
+        $downloaded = Test-Path $cacheFile
 
         $rowIndex = $dataGrid.Rows.Add()
         $row = $dataGrid.Rows[$rowIndex]
@@ -558,14 +569,22 @@ $btnDetect.Add_Click({
         $row.Cells["Check"].Value = (-not $installed -and $rt.Category -eq "common")
         $row.Cells["Name"].Value = $rt.Name
         $row.Cells["Category"].Value = $categoryText
-        $row.Cells["Status"].Value = $status
+        $row.Cells["DownloadStatus"].Value = if ($downloaded) { "已下载" } else { "未下载" }
+        $row.Cells["InstallStatus"].Value = if ($installed) { "已安装" } else { "未安装" }
         $row.Cells["Progress"].Value = ""
+
+        # 设置颜色
+        if ($downloaded) {
+            $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Green
+        } else {
+            $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Red
+        }
 
         if ($installed) {
             $row.Cells["Check"].ReadOnly = $true
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Green
+            $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Green
         } else {
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
+            $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Red
         }
     }
 
@@ -574,6 +593,7 @@ $btnDetect.Add_Click({
     $statusLabel.Text = "检测完成：$missingCount / $totalCount 项需要安装"
     $btnDetect.Enabled = $true
     $btnInstall.Enabled = ($missingCount -gt 0)
+    $btnInstallOnly.Enabled = ($missingCount -gt 0)
 })
 
 # ============================================
@@ -581,7 +601,7 @@ $btnDetect.Add_Click({
 # ============================================
 $selectAllBtn.Add_Click({
     foreach ($row in $dataGrid.Rows) {
-        if ($row.Cells["Status"].Value -ne "已安装") {
+        if ($row.Cells["InstallStatus"].Value -ne "已安装") {
             $row.Cells["Check"].Value = $true
         }
     }
@@ -605,7 +625,7 @@ $btnInstall.Add_Click({
 
     $selectedRows = @()
     foreach ($row in $dataGrid.Rows) {
-        if ($row.Cells["Check"].Value -eq $true -and $row.Cells["Status"].Value -ne "已安装") {
+        if ($row.Cells["Check"].Value -eq $true -and $row.Cells["InstallStatus"].Value -ne "已安装") {
             $selectedRows += $row
         }
     }
@@ -631,16 +651,17 @@ $btnInstall.Add_Click({
         $rt = $Script:Runtimes | Where-Object { $_.Name -eq $rtName }
         if (-not $rt) { continue }
 
-        $row.Cells["Status"].Value = "下载中..."
-        $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Orange
+        $row.Cells["DownloadStatus"].Value = "下载中..."
+        $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Orange
+        $row.Cells["Progress"].Value = ""
         $form.Refresh()
 
         # 检查是否已缓存
         $cacheFile = Join-Path $Script:CacheDir $rt.FileName
         if (Test-Path $cacheFile) {
+            $row.Cells["DownloadStatus"].Value = "已下载"
+            $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Green
             $row.Cells["Progress"].Value = "已缓存"
-            $row.Cells["Status"].Value = "已下载"
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Green
             $downloadedCount++
             continue
         }
@@ -649,14 +670,29 @@ $btnInstall.Add_Click({
         try {
             $webClient = New-Object System.Net.WebClient
             $webClient.DownloadFile($rt.DownloadUrl, $cacheFile)
+            $row.Cells["DownloadStatus"].Value = "已下载"
+            $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Green
             $row.Cells["Progress"].Value = "下载完成"
-            $row.Cells["Status"].Value = "已下载"
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Green
             $downloadedCount++
         } catch {
-            $row.Cells["Progress"].Value = "下载失败"
-            $row.Cells["Status"].Value = "失败"
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
+            $errorMsg = $_.Exception.Message
+            $row.Cells["DownloadStatus"].Value = "失败"
+            $row.Cells["DownloadStatus"].Style.ForeColor = [System.Drawing.Color]::Red
+            $row.Cells["Progress"].Value = "失败：$errorMsg"
+        }
+
+        $form.Refresh()
+    }
+
+    $statusLabel.Text = "下载完成！共 $downloadedCount / $totalItems 项，点击「安装」继续"
+    $btnDetect.Enabled = $true
+    $btnInstall.Enabled = $true
+    $btnInstallOnly.Enabled = $true
+    $selectAllBtn.Enabled = $true
+    $deselectAllBtn.Enabled = $true
+    $btnChangeCacheDir.Enabled = $true
+    $btnOpenCacheDir.Enabled = $true
+})
         }
 
         $form.Refresh()
@@ -684,7 +720,7 @@ $btnInstallOnly.Add_Click({
 
     $selectedRows = @()
     foreach ($row in $dataGrid.Rows) {
-        if ($row.Cells["Check"].Value -eq $true -and $row.Cells["Status"].Value -ne "已安装") {
+        if ($row.Cells["Check"].Value -eq $true -and $row.Cells["InstallStatus"].Value -ne "已安装") {
             $selectedRows += $row
         }
     }
@@ -710,8 +746,9 @@ $btnInstallOnly.Add_Click({
         $rt = $Script:Runtimes | Where-Object { $_.Name -eq $rtName }
         if (-not $rt) { continue }
 
-        $row.Cells["Status"].Value = "安装中..."
-        $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Orange
+        $row.Cells["InstallStatus"].Value = "安装中..."
+        $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Orange
+        $row.Cells["Progress"].Value = ""
         $form.Refresh()
 
         $success = $false
@@ -719,9 +756,9 @@ $btnInstallOnly.Add_Click({
 
         # 检查安装包是否存在
         if (-not (Test-Path $cacheFile)) {
-            $row.Cells["Progress"].Value = "未找到安装包"
-            $row.Cells["Status"].Value = "失败"
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
+            $row.Cells["InstallStatus"].Value = "失败"
+            $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Red
+            $row.Cells["Progress"].Value = "未找到安装包，请先下载"
             continue
         }
 
@@ -734,6 +771,8 @@ $btnInstallOnly.Add_Click({
                 $result = Enable-WindowsOptionalFeature -Online -FeatureName "NetFx3" -NoRestart -ErrorAction Stop
                 if ($result.RestartNeeded -or $result.State -eq "Enabled") {
                     $success = $true
+                } else {
+                    throw "启用失败"
                 }
             }
             elseif ($rt.PreExtract) {
@@ -746,6 +785,8 @@ $btnInstallOnly.Add_Click({
                 if (Test-Path $setupFile) {
                     Start-Process -FilePath $setupFile -ArgumentList "/silent" -Wait -NoNewWindow
                     $success = $true
+                } else {
+                    throw "未找到 DXSETUP.exe"
                 }
             }
             elseif ($rt.IsArchive) {
@@ -757,29 +798,35 @@ $btnInstallOnly.Add_Click({
                 if ($setupFile) {
                     Start-Process -FilePath $setupFile.FullName -Wait -NoNewWindow
                     $success = $true
+                } else {
+                    throw "未找到安装脚本"
                 }
             }
             else {
                 # 普通安装
                 $installArgs = $rt.InstallArgs
                 $installArgs = $ExecutionContext.InvokeCommand.ExpandString($installArgs)
-                Start-Process -FilePath $cacheFile -ArgumentList $installArgs -Wait -NoNewWindow
+                $process = Start-Process -FilePath $cacheFile -ArgumentList $installArgs -Wait -NoNewWindow -PassThru
+                if ($process.ExitCode -ne 0) {
+                    throw "安装程序返回错误码：$($process.ExitCode)"
+                }
                 $success = $true
             }
         } catch {
-            $row.Cells["Progress"].Value = "安装失败"
+            $errorMsg = $_.Exception.Message
+            $row.Cells["InstallStatus"].Value = "失败"
+            $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Red
+            $row.Cells["Progress"].Value = "失败：$errorMsg"
+            continue
         }
 
         if ($success) {
-            $row.Cells["Status"].Value = "已安装"
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Green
+            $row.Cells["InstallStatus"].Value = "已安装"
+            $row.Cells["InstallStatus"].Style.ForeColor = [System.Drawing.Color]::Green
             $row.Cells["Progress"].Value = "完成"
             $row.Cells["Check"].Value = $false
             $row.Cells["Check"].ReadOnly = $true
             $installedCount++
-        } else {
-            $row.Cells["Status"].Value = "失败"
-            $row.Cells["Status"].Style.ForeColor = [System.Drawing.Color]::Red
         }
 
         $form.Refresh()
